@@ -1,6 +1,14 @@
 <template>
   <div>
-    <svg ref="svg" :height="height" :width="width" id="svg"></svg>
+    <el-row>
+      <el-col :span="20" justify="start">
+        <svg ref="svg" :height="height" :width="width" id="svg"></svg>
+      </el-col>
+      <el-col :span="4">
+        <svg id="legend"></svg>
+      </el-col>
+    </el-row>
+    
     <button @click="findPaths(1, 1764)">
       搜索
     </button>
@@ -18,6 +26,7 @@ import { onMounted, ref, shallowReactive } from 'vue';
 import axios from 'axios';
 import * as d3 from 'd3';
 
+
 export default {
   name: "VisualizationVue",
   setup() {
@@ -31,12 +40,13 @@ export default {
       entity2id: Object(),
     });
 
-    let height = ref(1200)
-    let width = ref(1200)
+    let height = ref(1000)
+    let width = ref(1000)
 
     let link = {}, node = {}, graphAgg = {}, nodeToAggregate = {}, linkToAggregate = {};
     let aggregationPos = {}, beforeAggregationPos = {};
     let transform = Object();
+    let edgeLegend = [];
     let category18 = [
       '#56ebd3', '#197959', '#1be46d', '#6e9f23', '#bbe272', '#2f5672', '#8bd0eb', 
       '#7f20ac', '#9785d7', '#4e45a3', '#d179f8', '#9b1b5c', '#f2c8e8', '#75435b', 
@@ -66,6 +76,7 @@ export default {
 
     function init() {
       const svg = d3.select("#svg")
+      const legend = d3.select("#legend")
       let links=[], nodelist = []
       for (let n in visData.graph) {
         nodelist.push(n)
@@ -104,6 +115,7 @@ export default {
       simulation.tick(Math.ceil(Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay())))
 
       // 创建链接
+      let legendMap = {}
       link = svg.append('g')
         .attr('stroke-opacity', 0.5)
         .attr('stroke-width', 2)
@@ -114,7 +126,12 @@ export default {
         .attr("y1", d => d.source.y)
         .attr("x2", d => d.target.x)
         .attr("y2", d => d.target.y)
-        .attr('stroke', (d) => color(d.color));
+        .attr('stroke', (d) => {
+          legendMap[d.type] = d.color
+          return color(d.color)
+        });
+
+      edgeLegend = Object.entries(legendMap).map(([k, v]) => ({'type': k, 'color': v}))
 
       console.log(link)
 
@@ -179,7 +196,7 @@ export default {
       })
 
       console.log(Object.keys(aggregationPos).length)
-      console.log(visData.entity2id)
+      console.log(edgeLegend)
 
       console.log(node)
       // svg.call(d3.zoom()
@@ -192,6 +209,28 @@ export default {
       // .extent([[0, 0], [1200, 1200]])
       // .translateExtent([[0, 0], [1200, 1200]])
       // .scaleExtent([1, 8]))
+      legend.append('g')
+      .attr('stroke-width', 5)
+      .selectAll('legend')
+      .data(edgeLegend).enter()
+      .append('rect')
+        .attr('x', 25)
+        .attr('y', (d, i) => 25 * i + 25)
+        .attr('width', 25)
+        .attr('height', 6)
+        .attr('rx', 3)
+        .attr('ry', 3)
+        .style('fill', d => color(d.color))
+
+      legend.selectAll('legend-labels')
+      .data(edgeLegend).enter()
+      .append('text')
+        .attr('x', 70)
+        .attr('y', (d, i) => 25 * i + 25)
+        .text(d => d.type)
+        .style('fill', d => color(d.color))
+        .style('font-size', '15px')
+        .attr("alignment-baseline","middle")
     }
 
     function arrayToPairs(list) {
@@ -250,6 +289,8 @@ export default {
       return hashSet[tupleKey] === true;
     }
 
+    let linkToRender = {}, nodeToRender = {}
+
     function findPaths(start, end) {
       console.log(start, end)
       const PathForm = new FormData();
@@ -274,6 +315,8 @@ export default {
           //   'stroke', 
           //   (d) => isTupleInArray(pairs, [d.source.id, d.target.id]) ? '#ff0000' : color(d.color)
           // )
+          linkToRender = link.filter((d) => isTupleInArray(pairs, [d.source.id, d.target.id]))
+          nodeToRender = node.filter((d) => node_arr.indexOf(parseInt(visData.entity2id[d.id])) !== -1)
           link.attr(
             'stroke-width', 
             (d) => isTupleInArray(pairs, [d.source.id, d.target.id]) ? 5 : 2
@@ -302,6 +345,10 @@ button {
 #svg {
   border: 5px solid;
   border-radius: 10px;
+}
+
+#legend {
+  height: 100%;
 }
 
 .link {
