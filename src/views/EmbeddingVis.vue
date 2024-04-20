@@ -1,6 +1,16 @@
 <template>
   <div>
-    <svg ref="svg" width="1200" height="1200" id="svg"></svg>
+    <el-row>
+      <el-col :span="20" justify="start">
+        <svg ref="svg" :height="height" :width="width" id="svg"></svg>
+      </el-col>
+      <el-col :span="4">
+        <svg id="legend"></svg>
+      </el-col>
+    </el-row>
+    <el-row>
+      <svg id="paths" :height="height" :width="width"></svg>
+    </el-row>
     <button @click="findPaths(1, 1764)">
       搜索
     </button>
@@ -14,12 +24,12 @@
 </template>
 
 <script>
-import { onMounted, shallowReactive } from 'vue';
+import { onMounted, ref, shallowReactive } from 'vue';
 import axios from 'axios';
 import * as d3 from 'd3';
 
 export default {
-  name: "VisualizationVue",
+  name: "VisEmbedding",
   setup() {
     let visData = shallowReactive({
       id2entity: Object(),
@@ -30,7 +40,12 @@ export default {
       entity2id: Object(),
     });
 
+    let height = ref(1000)
+    let width = ref(1000)
+
     let link = {}, node = {};
+    let links = [], nodes = []; //datum
+    let edgeLegend = [];
     let category18 = [
       '#56ebd3', '#197959', '#1be46d', '#6e9f23', '#bbe272', '#2f5672', '#8bd0eb', 
       '#7f20ac', '#9785d7', '#4e45a3', '#d179f8', '#9b1b5c', '#f2c8e8', '#75435b', 
@@ -38,7 +53,7 @@ export default {
     ]
 
     const color = d3.scaleOrdinal(category18)
-    const ZOOM_SIZE = 10
+    const ZOOM_SIZE = 20
     let OFFSETX = 0, OFFSETY = 0
 
     onMounted(() => {
@@ -60,7 +75,9 @@ export default {
 
     function init() {
       const svg = d3.select("#svg")
-      let links=[], nodelist = []
+      const legend = d3.select('#legend')
+      const g_transform = svg.append('g')
+      let nodelist = []
       for (let n in visData.graph) {
         nodelist.push(n)
         visData.graph[n].forEach(neighbor => {
@@ -77,7 +94,7 @@ export default {
 
       // 将nodes中的id从代号转换为实体名称
       let keys = nodelist.map(id => visData.id2entity[id])
-      let nodes = Object.values(keys).map((name) => ({ 
+      nodes = Object.values(keys).map((name) => ({ 
         id: name,
         x: visData.embedding[visData.entity2id[name]][0] * ZOOM_SIZE,
         y: visData.embedding[visData.entity2id[name]][1] * ZOOM_SIZE
@@ -94,19 +111,10 @@ export default {
         v.y += OFFSETY;
       })
 
-      // 更新布局
-      // let simulation = d3.forceSimulation(nodes)
-      //   .force("link", d3.forceLink(links).id(d => d.id))
-      //   .force("charge", d3.forceManyBody())
-      //   .force("center", d3.forceCenter(600, 600))
-      //   .force("x", d3.forceX())
-      //   .force("y", d3.forceY())
-      //   .stop();
-
-      // simulation.tick(Math.ceil(Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay())))
+      let legendMap = {}
 
       // 创建链接
-      link = svg.append('g')
+      link = g_transform.append('g')
         .attr('stroke-opacity', 0.5)
         .attr('stroke-width', 2)
         .selectAll('line')
@@ -120,12 +128,17 @@ export default {
         // .attr("y1", d => d.source.y)
         // .attr("x2", d => d.target.x)
         // .attr("y2", d => d.target.y)
-        .attr('stroke', (d) => color(d.color))
+        .attr('stroke', (d) => {
+          legendMap[d.type] = d.color
+          return color(d.color)
+        });
+
+      edgeLegend = Object.entries(legendMap).map(([k, v]) => ({'type': k, 'color': v}))
 
       console.log(link)
 
       // 创建节点
-      node = svg.append('g')
+      node = g_transform.append('g')
         .attr('stroke', '0xfff')
         .attr('stroke-width', 1.5)
         .selectAll('circle')
@@ -135,41 +148,28 @@ export default {
         .attr("cy", (d) => d.y)
         .attr('r', 4)
 
-      // let text = svg.append('g')
-      //   .attr('fill', 'black')
-      //   .selectAll('.nodetext')
-      //   .data(nodes)
-      //   .join('text')
-      //   .attr('dx', d => d.x - 5)
-      //   .attr('dy', d => d.y - 4)
-      //   .attr('class', 'nodetext')
-      //   .text(d => d.id)
-      //   .attr('font-size', 7);
+      legend.append('g')
+      .attr('stroke-width', 5)
+      .selectAll('legend')
+      .data(edgeLegend).enter()
+      .append('rect')
+        .attr('x', 25)
+        .attr('y', (d, i) => 25 * i + 25)
+        .attr('width', 25)
+        .attr('height', 6)
+        .attr('rx', 3)
+        .attr('ry', 3)
+        .style('fill', d => color(d.color))
 
-      // node.append('title').text(d => d.id)
-
-      console.log(node)
-
-      // let relationLabel = svg.append('g')
-      //   .attr('fill', 'black')
-      //   .selectAll('.linklabel')
-      //   .data(links)
-      //   .join('text')
-      //   .attr('class', 'linklabel')
-      //   .attr('dx', d => (d.source.x + d.target.x) / 2)
-      //   .attr('dy', d => (d.source.y + d.target.y) / 2)
-      //   .text(d => d.type)
-      //   .attr('font-size', 7);
-      svg.call(d3.zoom()
-      .on('zoom', e => {
-        let transform = e.transform
-        svg.attr('transform', transform)
-        node.attr('r', 4 / transform.k)
-        link.attr('stroke-width', 2 / transform.k)
-      })
-      .extent([[0, 0], [1200, 1200]])
-      .translateExtent([[0, 0], [1200, 1200]])
-      .scaleExtent([1, 8]))
+      legend.selectAll('legend-labels')
+      .data(edgeLegend).enter()
+      .append('text')
+        .attr('x', 70)
+        .attr('y', (d, i) => 25 * i + 25)
+        .text(d => d.type)
+        .style('fill', d => color(d.color))
+        .style('font-size', '15px')
+        .attr("alignment-baseline","middle")
     }
 
     function arrayToPairs(list) {
@@ -226,6 +226,63 @@ export default {
       return hashSet[tupleKey] === true;
     }
 
+    function getEnlargeSize(nodeSelection) {
+      let minX = nodeSelection[0].x;
+      let minY = nodeSelection[0].y;
+      let maxX = nodeSelection[0].x;
+      let maxY = nodeSelection[0].y;
+      nodeSelection.forEach(node => {
+        maxX = Math.max(maxX, node.x);
+        maxY = Math.max(maxY, node.y);
+        minX = Math.min(minX, node.x);
+        minY = Math.min(minY, node.y);
+      })
+      return { maxX, maxY, minX, minY }
+    }
+
+    function renderPaths(linkSelection, nodeSelection) {
+      if (nodeSelection.length === 0) {
+        return;
+      }
+      const paths = d3.select('#paths')
+
+      let { maxX, maxY, minX, minY } = getEnlargeSize(nodeSelection)
+      const MULTIPLE_SIZE = Math.min(width.value * 0.9 / (maxX - minX), height.value * 0.9 / (maxY - minY))
+
+      console.log(MULTIPLE_SIZE)
+      console.log(maxX, maxY, minX, minY)
+
+      // nodeSelection.forEach(d => {
+      //   d.x -= minX
+      //   d.y -= minY
+      // })
+
+      // +10是为了显示完整节点，不然的话会有半个圆在svg外面，前面*0.9同理
+      let calX = (x, calLine) => (calLine ? (x * ZOOM_SIZE + OFFSETX - minX + 10) : (x - minX + 10)) * MULTIPLE_SIZE
+      let calY = (y, calLine) => (calLine ? (y * ZOOM_SIZE + OFFSETY - minY + 10) : (y - minY + 10)) * MULTIPLE_SIZE
+
+      paths.append('g')
+        .attr('stroke-width', 2)
+        .selectAll('line')
+        .data(linkSelection)
+        .join('line')
+        .attr("x1", (d) => calX(visData.embedding[visData.entity2id[d.source]][0], true))
+        .attr("y1", (d) => calY(visData.embedding[visData.entity2id[d.source]][1], true))
+        .attr("x2", (d) => calX(visData.embedding[visData.entity2id[d.target]][0], true))
+        .attr("y2", (d) => calY(visData.embedding[visData.entity2id[d.target]][1], true))
+        .attr('stroke', (d) => color(d.color));
+
+      paths.append('g')
+        .attr('stroke', '0xfff')
+        .attr('stroke-width', 1.5)
+        .selectAll('circle')
+        .data(nodeSelection)
+        .join('circle')
+        .attr("cx", (d) => calX(d.x, false))
+        .attr("cy", (d) => calY(d.y, false))
+        .attr('r', 4)
+    }
+
     function findPaths(start, end) {
       console.log(start, end)
       const PathForm = new FormData();
@@ -246,6 +303,14 @@ export default {
           }
           pairs = unique2DArray(pairs);
           let node_arr = Array.from(new Set([].concat(...Array.from(res.data.path))))
+          let linkToRender = links.filter(
+            (d) => 
+            isTupleInArray(
+              pairs, 
+              [d.source, d.target]
+            )
+          )
+          let nodeToRender = nodes.filter((d) => node_arr.indexOf(parseInt(visData.entity2id[d.id])) !== -1)
           link.attr(
             'stroke-width', 
             (d) => isTupleInArray(pairs, [d.source, d.target]) ? 5 : 2
@@ -261,14 +326,19 @@ export default {
             'stroke',
             (d) => node_arr.indexOf(parseInt(visData.entity2id[d.id])) == -1 ? '0xfff': 'red'
           )
+          renderPaths(linkToRender, nodeToRender)
         }
       )
     }
-    return {visData, findPaths, aggregateNodes, deAggregateNodes}
+    return {visData, findPaths, aggregateNodes, deAggregateNodes, width, height}
   },
 }
 </script>
 <style>
+#path {
+  border: 2 solid;
+  border-color: grey;
+}
 button {
   height: 20px;
   width: 50px;

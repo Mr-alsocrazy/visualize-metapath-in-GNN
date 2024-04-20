@@ -8,6 +8,9 @@
         <svg id="legend"></svg>
       </el-col>
     </el-row>
+    <el-row>
+      <svg id="paths" :height="height" :width="width"></svg>
+    </el-row>
     
     <button @click="findPaths(1, 1764)">
       搜索
@@ -44,6 +47,7 @@ export default {
     let width = ref(1000)
 
     let link = {}, node = {}, graphAgg = {}, nodeToAggregate = {}, linkToAggregate = {};
+    let links = [], nodes = []; // datum
     let aggregationPos = {}, beforeAggregationPos = {};
     let transform = Object();
     let edgeLegend = [];
@@ -66,9 +70,8 @@ export default {
           visData.out_degree = JSON.parse(res.data.out_degree);
           visData.embedding = res.data.embedding;
           visData.entity2id = Object.fromEntries(
-            Object.entries(visData.id2entity).map(([k, v]) => [v, parseInt(k)])
+            Object.entries(visData.id2entity).map(([k, v]) => [v, k])
           )
-          console.log(visData.out_degree)
           init();
         }
       )
@@ -77,7 +80,7 @@ export default {
     function init() {
       const svg = d3.select("#svg")
       const legend = d3.select("#legend")
-      let links=[], nodelist = []
+      let nodelist = []
       for (let n in visData.graph) {
         nodelist.push(n)
         graphAgg[n] = [];
@@ -99,7 +102,7 @@ export default {
 
       // 将nodes中的id从代号转换为实体名称
       let keys = nodelist.map(id => visData.id2entity[id])
-      let nodes = Object.values(keys).map((name) => ({
+      nodes = Object.values(keys).map((name) => ({
         'id': name
       }));
 
@@ -133,7 +136,7 @@ export default {
 
       edgeLegend = Object.entries(legendMap).map(([k, v]) => ({'type': k, 'color': v}))
 
-      console.log(link)
+      console.log(visData.entity2id)
 
       // 创建节点
       // node.id中的id是实体名称，并非三元组中实体的index，便于在有需要时展示实体名称
@@ -149,8 +152,10 @@ export default {
         .attr('r', 4)
 
       nodeToAggregate = node.filter(
-        d => visData.in_degree[visData.entity2id[d.id]] === 1 
-        && visData.out_degree[visData.entity2id[d.id]] === undefined
+        d => {
+          return visData.in_degree[visData.entity2id[d.id]] === 1 
+          && visData.out_degree[visData.entity2id[d.id]] === undefined
+        }
       )
 
       linkToAggregate = link.filter(
@@ -168,10 +173,8 @@ export default {
         nodes[i].y = d3.select(this).attr("cy")
       })
 
-      console.log(nodes)
+      console.log(node)
 
-      // console.log(node.attr("cx"))
-      // console.log(nodeToAggregate)
       Object.getOwnPropertyNames(graphAgg).forEach(startNode => {
         let NodesToAggregate = graphAgg[startNode]
         NodesToAggregate.forEach(item => {
@@ -194,11 +197,6 @@ export default {
           aggregationPos[item.index] = [x_t, y_t]
         })
       })
-
-      console.log(Object.keys(aggregationPos).length)
-      console.log(edgeLegend)
-
-      console.log(node)
       // svg.call(d3.zoom()
       // .on('zoom', e => {
       //   transform = e.transform
@@ -258,11 +256,12 @@ export default {
     }
 
     function aggregateNodes() {
+      console.log(nodeToAggregate)
       nodeToAggregate
         .attr("cx", d => aggregationPos[visData.entity2id[d.id]][0])
         .attr("cy", d => aggregationPos[visData.entity2id[d.id]][1])
         .attr('r', 10)
-        .attr('stroke', 'red')
+        .attr('stroke', 'green')
       linkToAggregate
         .attr("x2", d => aggregationPos[visData.entity2id[d.target.id]][0])
         .attr("y2", d => aggregationPos[visData.entity2id[d.target.id]][1])
@@ -289,7 +288,30 @@ export default {
       return hashSet[tupleKey] === true;
     }
 
-    let linkToRender = {}, nodeToRender = {}
+    function renderPaths(linkSelection, nodeSelection) {
+      const paths = d3.select('#paths')
+
+      paths.append('g')
+        .attr('stroke-width', 2)
+        .selectAll('line')
+        .data(linkSelection)
+        .join('line')
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y)
+        .attr('stroke', (d) => color(d.color));
+
+      paths.append('g')
+        .attr('stroke', '0xfff')
+        .attr('stroke-width', 1.5)
+        .selectAll('circle')
+        .data(nodeSelection)
+        .join('circle')
+        .attr("cx", (d) => d.x)
+        .attr("cy", (d) => d.y)
+        .attr('r', 4)
+    }
 
     function findPaths(start, end) {
       console.log(start, end)
@@ -315,8 +337,14 @@ export default {
           //   'stroke', 
           //   (d) => isTupleInArray(pairs, [d.source.id, d.target.id]) ? '#ff0000' : color(d.color)
           // )
-          linkToRender = link.filter((d) => isTupleInArray(pairs, [d.source.id, d.target.id]))
-          nodeToRender = node.filter((d) => node_arr.indexOf(parseInt(visData.entity2id[d.id])) !== -1)
+          let linkToRender = links.filter(
+            (d) => 
+            isTupleInArray(
+              pairs, 
+              [d.source.id, d.target.id]
+            )
+          )
+          let nodeToRender = nodes.filter((d) => node_arr.indexOf(parseInt(visData.entity2id[d.id])) !== -1)
           link.attr(
             'stroke-width', 
             (d) => isTupleInArray(pairs, [d.source.id, d.target.id]) ? 5 : 2
@@ -329,6 +357,7 @@ export default {
             'stroke',
             (d) => node_arr.indexOf(parseInt(visData.entity2id[d.id])) == -1 ? '0xfff': 'red'
           )
+          renderPaths(linkToRender, nodeToRender)
         }
       )
     }
@@ -345,6 +374,7 @@ button {
 #svg {
   border: 5px solid;
   border-radius: 10px;
+  border-color: rgba(181, 174, 174, 0.801);
 }
 
 #legend {
