@@ -43,6 +43,8 @@ export default {
     let height = ref(1000)
     let width = ref(1000)
 
+    let svg, graph, legend
+
     let link = {}, node = {};
     let links = [], nodes = []; //datum
     let edgeLegend = [];
@@ -74,9 +76,10 @@ export default {
     });
 
     function init() {
-      const svg = d3.select("#svg")
-      const legend = d3.select('#legend')
-      const g_transform = svg.append('g')
+      svg = d3.select("#svg")
+      svg.attr('viewBox', [0, 0, width.value, height.value])
+      graph = svg.append('g')
+      legend = d3.select('#legend')
       let nodelist = []
       for (let n in visData.graph) {
         nodelist.push(n)
@@ -114,7 +117,7 @@ export default {
       let legendMap = {}
 
       // 创建链接
-      link = g_transform.append('g')
+      link = graph.append('g')
         .attr('stroke-opacity', 0.5)
         .attr('stroke-width', 2)
         .selectAll('line')
@@ -124,6 +127,7 @@ export default {
         .attr("y1", (d) => visData.embedding[visData.entity2id[d.source]][1] * ZOOM_SIZE + OFFSETY)
         .attr("x2", (d) => visData.embedding[visData.entity2id[d.target]][0] * ZOOM_SIZE + OFFSETX)
         .attr("y2", (d) => visData.embedding[visData.entity2id[d.target]][1] * ZOOM_SIZE + OFFSETY)
+        .attr('class', 'link')
         // .attr("x1", d => d.source.x)
         // .attr("y1", d => d.source.y)
         // .attr("x2", d => d.target.x)
@@ -135,10 +139,8 @@ export default {
 
       edgeLegend = Object.entries(legendMap).map(([k, v]) => ({'type': k, 'color': v}))
 
-      console.log(link)
-
       // 创建节点
-      node = g_transform.append('g')
+      node = graph.append('g')
         .attr('stroke', '0xfff')
         .attr('stroke-width', 1.5)
         .selectAll('circle')
@@ -147,6 +149,16 @@ export default {
         .attr("cx", (d) => d.x)
         .attr("cy", (d) => d.y)
         .attr('r', 4)
+
+      svg.call(d3.zoom()
+        .extent([[0, 0], [width.value, height.value]])
+        .scaleExtent([1, 8])
+        .on("zoom", ({transform}) => {
+          graph.attr('transform', transform)
+          node.attr("r", 4 / transform.k)
+          svg.selectAll('.metapath').attr('stroke-width', 5 / transform.k)
+          svg.selectAll('.link').attr('stroke-width', 2 / transform.k)
+        }));
 
       legend.append('g')
       .attr('stroke-width', 5)
@@ -296,6 +308,7 @@ export default {
       })
       .then(
         res => {
+          link.attr('class', 'link')
           let pairs = [];
           for (let item in res.data.path) {
             let metapath = res.data.path[item];
@@ -312,16 +325,15 @@ export default {
           )
           let nodeToRender = nodes.filter((d) => node_arr.indexOf(parseInt(visData.entity2id[d.id])) !== -1)
           link.attr(
-            'stroke-width', 
-            (d) => isTupleInArray(pairs, [d.source, d.target]) ? 5 : 2
+            'class',
+            (d) => isTupleInArray(pairs, [d.source, d.target]) ? 'metapath': 'link'
           )
-          link.attr(
-            'stroke-opacity',
-            (d) => isTupleInArray(pairs, [d.source, d.target]) ? 1 : 0.01
-          )
-          // link.filter(
-          //   d => console.log(isTupleInArray(pairs, [d.source, d.target]))
-          // )
+          svg.selectAll('.metapath')
+            .attr('stroke-width', 5)
+            .attr('stroke-opacity', 1)
+          svg.selectAll('.link')
+            .attr('stroke-width', 2)
+            .attr('stroke-opacity', 0.01)
           node.attr(
             'stroke',
             (d) => node_arr.indexOf(parseInt(visData.entity2id[d.id])) == -1 ? '0xfff': 'red'
@@ -344,25 +356,4 @@ button {
   width: 50px;
   z-index: 999;
 }
-
-.link {
-  stroke: 0x999;
-  stroke-opacity: 0.6;
-}
-
-.node {
-  fill: 0xccc;
-  stroke: 0xfff;
-  stroke-width: 1.5px;
-}
-
-.node text {
-  pointer-events: none;
-  font: 10px sans-serif;
-}
-
-.relation {
-  font: 8px sans-serif;
-}
-
 </style>
