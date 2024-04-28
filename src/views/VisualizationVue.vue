@@ -21,6 +21,9 @@
     <button @click="deAggregateNodes">
       显示
     </button>
+
+    <h2><a target="_blank" >关于关系分类的实体数量展示</a></h2>
+    <div id="hist-container"></div>
   </div>
 </template>
 
@@ -65,6 +68,7 @@ export default {
           visData.id2entity = res.data.id2entity;
           visData.id2relation = res.data.id2relation;
           visData.graph = JSON.parse(res.data.graph);
+          visData.adj_list = JSON.parse(res.data.adj_list);
           visData.in_degree = JSON.parse(res.data.in_degree);
           visData.out_degree = JSON.parse(res.data.out_degree);
           visData.embedding = res.data.embedding;
@@ -242,6 +246,8 @@ export default {
           .style('font-size', '15px')
           .attr("alignment-baseline","middle")
       }
+
+      drawBarChart();
     }
 
     function arrayToPairs(list) {
@@ -373,6 +379,75 @@ export default {
           renderPaths(linkToRender, nodeToRender)
         }
       )
+    }
+
+    function drawBarChart(){
+      let adj_matrix = visData.adj_list;
+      let list_bar_map_all = [];
+      for (const key in adj_matrix) {
+        var value_found = visData.id2relation[key]
+        list_bar_map_all.push({key:value_found,
+            value:adj_matrix[key],color:key});
+
+        }
+      let width=1500,height=2000,padding=220
+
+      let svg=d3.select("#hist-container")
+      .append("svg")
+      .attr("width",width)
+      .attr("height",height)
+      debugger
+      let xScale=d3.scaleLinear()  //线性比例尺，
+      .domain([0,d3.max(list_bar_map_all,(d)=>d.value)])  //离散型
+      .range([padding,width])  //连续型  
+
+      let yScale=d3.scaleBand()   //序数比例尺
+      .domain(list_bar_map_all.map(d=>d.key)) //定义域
+      .range([padding*2,height-2*padding])  //值域
+      .padding(0.5)
+
+    
+
+      let xAxis=d3.axisBottom(xScale)
+      let yAxis=d3.axisLeft(yScale)
+      
+      
+      // 绘制坐标轴
+      svg.append('g')
+          .attr('class', 'axis')
+          .attr('transform','translate('+ padding+','+padding+')')
+          .call(yAxis)
+          .selectAll('text')
+          //.attr('transform', 'rotate(25)')
+          .attr('x', -10)
+          .attr('y', 0)
+          .style('text-anchor', 'end')
+          .style('font-size', '16px')
+          .append('foreignObject')
+          .attr('x', -20)
+          .attr('y', -10)
+          .attr('width', 20)
+          .attr('height', 20)
+          .append('xhtml:input')
+          .attr('type', 'checkbox')
+          .attr('checked', true); // 默认选中
+      svg.append('g')
+          .attr('class', 'axis')
+          .attr('transform', 'translate(0,'+(height-padding)+')') 
+          .call(xAxis);
+
+      svg.selectAll("rect")
+      .data(list_bar_map_all)
+      .enter()
+      .append("rect")
+      .attr("x",padding)
+      .attr("y",d=>yScale(d.key)+padding)
+      .attr("height",yScale.bandwidth())
+      .attr("width",d=>xScale(d.value))
+      .attr("class","myrect")
+      .attr('stroke', '#56ebd3')
+      //.attr('fill', d=>category18[edgeLegend.filter(item => item.type === d.key).map(item => item.color)]); // 使用数组变量作为填充颜色)
+      .attr('fill', d=>color(d.color)); // 使用数组变量作为填充颜色)
     }
     return {visData, findPaths, aggregateNodes, deAggregateNodes, width, height}
   },
