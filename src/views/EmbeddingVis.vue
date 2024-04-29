@@ -8,9 +8,9 @@
         <svg id="legend"></svg>
       </el-col>
     </el-row>
-    <el-row>
+    <!-- <el-row>
       <svg id="paths" :height="height" :width="width"></svg>
-    </el-row>
+    </el-row> -->
     <button @click="findPaths(1, 1764)">
       搜索
     </button>
@@ -338,7 +338,7 @@ export default {
             'stroke',
             (d) => node_arr.indexOf(parseInt(visData.entity2id[d.id])) == -1 ? '0xfff': 'red'
           )
-          renderPaths(linkToRender, nodeToRender)
+          // renderPaths(linkToRender, nodeToRender)
         }
       )
     }

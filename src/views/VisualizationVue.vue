@@ -8,9 +8,9 @@
         <svg id="legend"></svg>
       </el-col>
     </el-row>
-    <el-row>
+    <!-- <el-row>
       <svg id="paths" :height="height" :width="width"></svg>
-    </el-row>
+    </el-row> -->
     
     <button @click="findPaths(1, 1764)">
       搜索
@@ -107,141 +107,127 @@ export default {
         'id': name
       }));
 
-      // // 更新布局
-      // let simulation = d3.forceSimulation(nodes)
-      //   .force("link", d3.forceLink(links).id(d => d.id))
-      //   .force("charge", d3.forceManyBody())
-      //   .force("center", d3.forceCenter(height.value / 2, width.value / 2))
-      //   .force("x", d3.forceX())
-      //   .force("y", d3.forceY())
-      //   .stop();
+      // 更新布局
+      let simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links).id(d => d.id))
+        .force("charge", d3.forceManyBody())
+        .force("center", d3.forceCenter(height.value / 2, width.value / 2))
+        .force("x", d3.forceX())
+        .force("y", d3.forceY())
+        .stop();
 
-      // simulation.tick(Math.ceil(Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay())))
+      simulation.tick(Math.ceil(Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay())))
 
-      const worker = new Worker(new URL('simulation.js', import.meta.url))
-      worker.postMessage({
-        nodes, 
-        links, 
-        width: width.value, 
-        height: height.value
+      let legendMap = {}
+      link = graph.append('g')
+        .attr('stroke-opacity', 0.5)
+        .attr('stroke-width', 2)
+        .selectAll('line')
+        .data(links)
+        .join('line')
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y)
+        .attr('stroke', (d) => {
+          legendMap[d.type] = d.color
+          return color(d.color)
+        });
+
+      edgeLegend = Object.entries(legendMap).map(([k, v]) => ({'type': k, 'color': v}))
+
+      console.log(visData.entity2id)
+
+      // 创建节点
+      // node.id中的id是实体名称，并非三元组中实体的index，便于在有需要时展示实体名称
+      // 其他地方与实体有关的全部是index，方便转换可以使用entity2id & id2entity
+      node = graph.append('g')
+        .attr('stroke', '0xfff')
+        .attr('stroke-width', 1.5)
+        .selectAll('circle')
+        .data(nodes)
+        .join('circle')
+        .attr("cx", (d) => d.x)
+        .attr("cy", (d) => d.y)
+        .attr('r', 4)
+
+      nodeToAggregate = node.filter(
+        d => {
+          return visData.in_degree[visData.entity2id[d.id]] === 1 
+          && visData.out_degree[visData.entity2id[d.id]] === undefined
+        }
+      )
+
+      linkToAggregate = link.filter(
+        d => visData.in_degree[visData.entity2id[d.target.id]] === 1 
+        && visData.out_degree[visData.entity2id[d.target.id]] === undefined
+      )
+
+      Object.getOwnPropertyNames(graphAgg).forEach(key => {
+        if (graphAgg[key].length === 0)
+          delete graphAgg[key]
       })
 
-      worker.onmessage = (e) => { 
-        console.log(e.data)
-        nodes = e.data.nodes
-        links = e.data.links
-        // 创建链接
-        let legendMap = {}
-        link = graph.append('g')
-          .attr('stroke-opacity', 0.5)
-          .attr('stroke-width', 2)
-          .selectAll('line')
-          .data(links)
-          .join('line')
-          .attr("x1", d => d.source.x)
-          .attr("y1", d => d.source.y)
-          .attr("x2", d => d.target.x)
-          .attr("y2", d => d.target.y)
-          .attr('stroke', (d) => {
-            legendMap[d.type] = d.color
-            return color(d.color)
-          });
+      d3.selectAll('circle').each(function(d, i) {
+        nodes[i].x = d3.select(this).attr("cx")
+        nodes[i].y = d3.select(this).attr("cy")
+      })
 
-        edgeLegend = Object.entries(legendMap).map(([k, v]) => ({'type': k, 'color': v}))
+      console.log(node)
 
-        console.log(visData.entity2id)
-
-        // 创建节点
-        // node.id中的id是实体名称，并非三元组中实体的index，便于在有需要时展示实体名称
-        // 其他地方与实体有关的全部是index，方便转换可以使用entity2id & id2entity
-        node = graph.append('g')
-          .attr('stroke', '0xfff')
-          .attr('stroke-width', 1.5)
-          .selectAll('circle')
-          .data(nodes)
-          .join('circle')
-          .attr("cx", (d) => d.x)
-          .attr("cy", (d) => d.y)
-          .attr('r', 4)
-
-        nodeToAggregate = node.filter(
-          d => {
-            return visData.in_degree[visData.entity2id[d.id]] === 1 
-            && visData.out_degree[visData.entity2id[d.id]] === undefined
-          }
-        )
-
-        linkToAggregate = link.filter(
-          d => visData.in_degree[visData.entity2id[d.target.id]] === 1 
-          && visData.out_degree[visData.entity2id[d.target.id]] === undefined
-        )
-
-        Object.getOwnPropertyNames(graphAgg).forEach(key => {
-          if (graphAgg[key].length === 0)
-            delete graphAgg[key]
+      Object.getOwnPropertyNames(graphAgg).forEach(startNode => {
+        let NodesToAggregate = graphAgg[startNode]
+        NodesToAggregate.forEach(item => {
+          item.x = nodes.find(x => x.id === visData.id2entity[item.index]).x
+          item.y = nodes.find(x => x.id === visData.id2entity[item.index]).y
+          beforeAggregationPos[item.index] = [item.x, item.y]
         })
-
-        d3.selectAll('circle').each(function(d, i) {
-          nodes[i].x = d3.select(this).attr("cx")
-          nodes[i].y = d3.select(this).attr("cy")
+      })
+      Object.getOwnPropertyNames(graphAgg).forEach(startNode => {
+        let x_t = 0, y_t = 0
+        graphAgg[startNode].forEach(item => {
+          x_t += parseFloat(item.x)
+          y_t += parseFloat(item.y)
         })
-
-        console.log(node)
-
-        Object.getOwnPropertyNames(graphAgg).forEach(startNode => {
-          let NodesToAggregate = graphAgg[startNode]
-          NodesToAggregate.forEach(item => {
-            item.x = nodes.find(x => x.id === visData.id2entity[item.index]).x
-            item.y = nodes.find(x => x.id === visData.id2entity[item.index]).y
-            beforeAggregationPos[item.index] = [item.x, item.y]
-          })
+        x_t /= graphAgg[startNode].length
+        y_t /= graphAgg[startNode].length
+        graphAgg[startNode].forEach(item => {
+          item.x = x_t
+          item.y = y_t
+          aggregationPos[item.index] = [x_t, y_t]
         })
-        Object.getOwnPropertyNames(graphAgg).forEach(startNode => {
-          let x_t = 0, y_t = 0
-          graphAgg[startNode].forEach(item => {
-            x_t += parseFloat(item.x)
-            y_t += parseFloat(item.y)
-          })
-          x_t /= graphAgg[startNode].length
-          y_t /= graphAgg[startNode].length
-          graphAgg[startNode].forEach(item => {
-            item.x = x_t
-            item.y = y_t
-            aggregationPos[item.index] = [x_t, y_t]
-          })
-        })
-        svg.call(d3.zoom()
-          .extent([[0, 0], [width.value, height.value]])
-          .scaleExtent([1, 8])
-          .on("zoom", ({transform}) => {
-            graph.attr('transform', transform)
-            // node.attr("r", 4 / transform.k)
-            // svg.selectAll('.metapath').attr('stroke-width', 5 / transform.k)
-            // svg.selectAll('.link').attr('storke-width', 2 / transform.k)
-          }));
-        legend.append('g')
-        .attr('stroke-width', 5)
-        .selectAll('legend')
-        .data(edgeLegend).enter()
-        .append('rect')
-          .attr('x', 25)
-          .attr('y', (d, i) => 25 * i + 25)
-          .attr('width', 25)
-          .attr('height', 6)
-          .attr('rx', 3)
-          .attr('ry', 3)
-          .style('fill', d => color(d.color))
+      })
+      svg.call(d3.zoom()
+        .extent([[0, 0], [width.value, height.value]])
+        .scaleExtent([1, 8])
+        .on("zoom", ({transform}) => {
+          graph.attr('transform', transform)
+          // node.attr("r", 4 / transform.k)
+          // svg.selectAll('.metapath').attr('stroke-width', 5 / transform.k)
+          // svg.selectAll('.link').attr('storke-width', 2 / transform.k)
+        }));
+      legend.append('g')
+      .attr('stroke-width', 5)
+      .selectAll('legend')
+      .data(edgeLegend).enter()
+      .append('rect')
+        .attr('x', 25)
+        .attr('y', (d, i) => 25 * i + 25)
+        .attr('width', 25)
+        .attr('height', 6)
+        .attr('rx', 3)
+        .attr('ry', 3)
+        .style('fill', d => color(d.color))
 
-        legend.selectAll('legend-labels')
-        .data(edgeLegend).enter()
-        .append('text')
-          .attr('x', 70)
-          .attr('y', (d, i) => 25 * i + 25)
-          .text(d => d.type)
-          .style('fill', d => color(d.color))
-          .style('font-size', '15px')
-          .attr("alignment-baseline","middle")
-      }
+      legend.selectAll('legend-labels')
+      .data(edgeLegend).enter()
+      .append('text')
+        .attr('x', 70)
+        .attr('y', (d, i) => 25 * i + 25)
+        .text(d => d.type)
+        .style('fill', d => color(d.color))
+        .style('font-size', '15px')
+        .attr("alignment-baseline","middle")
     }
 
     function arrayToPairs(list) {
@@ -370,7 +356,7 @@ export default {
             'stroke',
             (d) => node_arr.indexOf(parseInt(visData.entity2id[d.id])) == -1 ? '0xfff': 'red'
           )
-          renderPaths(linkToRender, nodeToRender)
+          // renderPaths(linkToRender, nodeToRender)
         }
       )
     }
