@@ -156,7 +156,7 @@ export default {
         draggable: true
       })
 
-      nodesToRender.forEach((v, i) => {
+      nodesToRender.forEach((v) => {
         let circle = new Konva.Circle({
           x: visData.embedding[v][0] * 20 + stage.width() / 2,
           y: visData.embedding[v][1] * 20 + stage.height() / 2,
@@ -166,7 +166,7 @@ export default {
           strokeWidth: 1,
           scaleX: 1,
           scaleY: 1,
-          id: i
+          id: v
         })
         circle.on('click', circleOnClick)
         layer.add(circle)
@@ -270,6 +270,8 @@ export default {
         }).then(
           res => {
             selectedNodesByLabel = res.data.filtered_index
+            console.log(selectFilter)
+            console.log(selectedNodesByLabel)
 
             if (selectCircleLength !== 0) {
               let _selectedCircleSets = new Set(selectFilter.selectedCircle)
