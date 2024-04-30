@@ -5,18 +5,23 @@
         <div id="container"/>
       </el-col>
       <el-col :span="12" justify="start">
-        <svg id="hist-container" :height="1000" :width="1000"></svg>
+        <el-row id="filter mb-4" v-show="isDataLoaded">
+          <el-col :span="24">
+            <svg id="hist-container" :height="1000" :width="928"></svg>
+          </el-col>
+          <el-col :span="12">
+            <el-button type="primary" @click="filter_nodes" text>Filter Nodes</el-button>
+          </el-col>
+          <el-col :span="12">
+            <el-button type="primary" @click="cancel_selection" text>Cancel Selection</el-button>
+          </el-col>
+        </el-row>
       </el-col>
     </el-row>
-    <!-- <div id="selected">
-      <li v-for="(item, index) in selectFilter.selectedCircle" :key="index">
-        {{ visData.id2entity[item] }}
-      </li>
-    </div> -->
   </div>
 </template>
 <script>
-import { onMounted, ref, shallowReactive, reactive, nextTick } from 'vue'
+import { onMounted, ref, shallowReactive, reactive } from 'vue'
 import axios from 'axios'
 import Konva from 'konva'
 import * as d3 from 'd3'
@@ -31,6 +36,8 @@ export default {
       edge_type_count: Object(),
     })
 
+    let nodesToRender = []
+
     let stage = shallowReactive({
       stage: null
     })
@@ -39,8 +46,8 @@ export default {
     let height = ref(1200)
     let width = ref(1200)
 
-    let barWidth = ref(1000)
-    let barHeight = ref(1000)
+    let barSVGWidth = ref(1000)
+    let barSVGHeight = ref(1000)
 
     let selectFilter = reactive({
       selectedCircle: new Array(),
@@ -66,9 +73,12 @@ export default {
           visData.embedding = res.data.embedding
           visData.edge_type_count = res.data.edge_type_count
           visData.edge_type_count = Object.entries(visData.edge_type_count).map(([k, v]) => ({'type': k, 'frequency': v}))
+
           relation2id = Object.fromEntries(Object.entries(visData.id2relation).map(([k, v]) => ([v, k])))
+
+          isDataLoaded.value = true
+
           init()
-          nextTick(() => isDataLoaded = true)
         }
       )
     })
@@ -112,7 +122,7 @@ export default {
       })
 
       stage.add(layer)
-      
+
       let scaleBy = 1.1
       stage.on('wheel', (e) => {
         e.evt.preventDefault()
@@ -140,6 +150,31 @@ export default {
       drawBarChart()
     }
 
+    function nodesReRender() {
+      stage.removeChildren()
+      let layer = new Konva.Layer({
+        draggable: true
+      })
+
+      nodesToRender.forEach((v, i) => {
+        let circle = new Konva.Circle({
+          x: visData.embedding[v][0] * 20 + stage.width() / 2,
+          y: visData.embedding[v][1] * 20 + stage.height() / 2,
+          radius: 5,
+          fill: 'red',
+          stroke: 'black',
+          strokeWidth: 1,
+          scaleX: 1,
+          scaleY: 1,
+          id: i
+        })
+        circle.on('click', circleOnClick)
+        layer.add(circle)
+      })
+
+      stage.add(layer)
+    }
+
     function drawBarChart(){
       const barHeight = 25
       const marginTop = 30
@@ -148,6 +183,8 @@ export default {
       const marginLeft = 150
       const width = 928
       const height = Math.ceil((visData.edge_type_count.length + 0.1) * barHeight) + marginTop + marginBottom
+      barSVGHeight.value = height
+      barSVGWidth.value = width
 
       let svg = d3.select('#hist-container')
       .append('svg')
@@ -213,7 +250,60 @@ export default {
         })
     }
 
-    return { width, height, isDataLoaded, visData, selectFilter }
+    function filter_nodes() {
+      let selectCircleLength = selectFilter.selectedCircle.length
+      let selectedLabelLength = selectFilter.selectedLabel.length
+      if (selectCircleLength === 0 && selectedLabelLength === 0) {
+        init()
+      } else if (selectedLabelLength === 0) {
+        nodesToRender = Array.from(selectFilter.selectedCircle)
+        nodesReRender()
+      } else {
+        let selectedLabelForm = new FormData()
+        selectedLabelForm.append('filter_links', Array.from(selectFilter.selectedLabel))
+        let selectedNodesByLabel = []
+
+        axios.post('http://127.0.0.1:5000/filter_by_link_type', selectedLabelForm, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }).then(
+          res => {
+            selectedNodesByLabel = res.data.filtered_index
+
+            if (selectCircleLength !== 0) {
+              let _selectedCircleSets = new Set(selectFilter.selectedCircle)
+              let _selectedLabelSets = new Set(selectedNodesByLabel)
+              nodesToRender = Array.from(
+                new Set(
+                  [..._selectedLabelSets].filter(value => _selectedCircleSets.has(value))
+                )
+              )
+            } else {
+              nodesToRender = selectedNodesByLabel
+            }
+            console.log(nodesToRender)
+            nodesReRender()
+          }
+        )
+      }
+    }
+    
+    function cancel_selection() {
+      init()
+    }
+
+    return { 
+      width, 
+      height, 
+      isDataLoaded, 
+      visData, 
+      selectFilter, 
+      barSVGHeight, 
+      barSVGWidth, 
+      filter_nodes, 
+      cancel_selection 
+    }
   },
 }
 </script>
@@ -223,5 +313,12 @@ export default {
   border-color: grey;
   width: 1200px;
   height: 1200px;
+}
+
+#filter {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-content: flex-start;
 }
 </style>
