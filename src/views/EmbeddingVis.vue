@@ -5,13 +5,28 @@
         <svg ref="svg" :height="height" :width="width" id="svg"></svg>
       </el-col>
       <el-col :span="4">
-        <svg id="legend"></svg>
+        <el-row>
+          <el-col :span="24">
+            <svg id="legend" :width="300" :height="500"></svg>
+          </el-col>
+          <el-col :span="12">
+            <el-button type="primary" text @click="add_start">As Start</el-button>
+          </el-col>
+          <el-col :span="12">
+            <el-button type="primary" text @click="add_end">As End</el-button>
+          </el-col>
+          <el-col :span="24">
+            <li v-for="(item, index) in prob.result" :key="index">
+              {{ visData.id2relation[item.relation] }} : {{ (item.prob * 100).toFixed(4) + '%' }}
+            </li>
+          </el-col>
+        </el-row>
       </el-col>
     </el-row>
     <!-- <el-row>
       <svg id="paths" :height="height" :width="width"></svg>
     </el-row> -->
-    <button @click="findPaths(1, 1764)">
+    <button @click="findPaths">
       搜索
     </button>
     <button @click="aggregateNodes">
@@ -24,7 +39,7 @@
 </template>
 
 <script>
-import { onMounted, ref, shallowReactive } from 'vue';
+import { onMounted, reactive, ref, shallowReactive } from 'vue';
 import axios from 'axios';
 import * as d3 from 'd3';
 
@@ -38,10 +53,18 @@ export default {
       graph: Object(),
       embedding: Object(),
       entity2id: Object(),
+      nodes_to_render: Object()
     });
+
+    let startNode = -1, endNode = -1
+    let selectNode = -1
 
     let height = ref(1000)
     let width = ref(1000)
+
+    let prob = reactive({
+      result: new Array()
+    })
 
     let svg, graph, legend
 
@@ -70,6 +93,8 @@ export default {
           visData.entity2id = Object.fromEntries(
             Object.entries(visData.id2entity).map(([k, v]) => [v, k])
           )
+          visData.nodes_to_render = res.data.chosen
+          console.log(visData.nodes_to_render)
           init();
         }
       )
@@ -141,7 +166,7 @@ export default {
 
       // 创建节点
       node = graph.append('g')
-        .attr('stroke', '0xfff')
+        .attr('stroke', 'black')
         .attr('stroke-width', 1.5)
         .selectAll('circle')
         .data(nodes)
@@ -149,6 +174,20 @@ export default {
         .attr("cx", (d) => d.x)
         .attr("cy", (d) => d.y)
         .attr('r', 4)
+        .on('click', function(e, d) {
+          let cid = visData.entity2id[d.id]
+          if (selectNode !== cid) {
+            selectNode = cid
+            console.log(selectNode)
+            d3.select(this).attr('stroke', 'red')
+          } else {
+            selectNode = -1
+            d3.select(this).attr('stroke', 'black')
+          }
+        })
+
+      node.filter(d => visData.nodes_to_render.includes(parseInt(visData.entity2id[d.id])))
+        .attr('fill', 'red')
 
       svg.call(d3.zoom()
         .extent([[0, 0], [width.value, height.value]])
@@ -295,11 +334,28 @@ export default {
         .attr('r', 4)
     }
 
-    function findPaths(start, end) {
-      console.log(start, end)
+    function add_start() {
+      startNode = selectNode
+    }
+
+    function add_end() {
+      endNode = selectNode
+      let predictForm = new FormData()
+      predictForm.append('start', startNode)
+      predictForm.append('end', endNode)
+      axios.post('http://127.0.0.1:5000/predict', predictForm, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      }).then(res => {
+        prob.result = res.data.result
+      })
+    }
+
+    function findPaths() {
       const PathForm = new FormData();
-      PathForm.append('start', start);
-      PathForm.append('end', end);
+      PathForm.append('start', startNode);
+      PathForm.append('end', endNode);
       PathForm.append('metapath', [9, 10, 6]);
       axios.post('http://127.0.0.1:5000/pathfind', PathForm, {
         headers: {
@@ -342,7 +398,17 @@ export default {
         }
       )
     }
-    return {visData, findPaths, aggregateNodes, deAggregateNodes, width, height}
+    return {
+      visData, 
+      findPaths, 
+      aggregateNodes, 
+      deAggregateNodes, 
+      width, 
+      height, 
+      prob,
+      add_start, 
+      add_end
+    }
   },
 }
 </script>

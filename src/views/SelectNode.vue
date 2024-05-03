@@ -7,13 +7,37 @@
       <el-col :span="12" justify="start">
         <el-row id="filter mb-4" v-show="isDataLoaded">
           <el-col :span="24">
-            <svg id="hist-container" :height="1000" :width="928"></svg>
+            <svg id="hist-container" :height="barSVGHeight" :width="barSVGWidth"></svg>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="12" :offset="6">
+            <el-slider class="slider" 
+            v-model="pagerank_value" 
+            range 
+            :step="0.0001" 
+            
+            :min="pagerank_min"
+            :max="pagerank_max"
+            />
+          </el-col>
+          <el-col :span="12" :offset="6">
+            <el-slider 
+            class="slider" 
+            v-model="degree_centrality_value" 
+            range 
+            :step="0.0001" 
+            
+            :min="degree_centrality_min"
+            :max="degree_centrality_max"
+            />
+          </el-col>
+          <el-col :span="8">
             <el-button type="primary" @click="filter_nodes" text>Filter Nodes</el-button>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="8">
             <el-button type="primary" @click="cancel_selection" text>Cancel Selection</el-button>
+          </el-col>
+          <el-col :span="8">
+            <el-button type="primary" @click="select_nodes" text>Select Nodes</el-button>
           </el-col>
         </el-row>
       </el-col>
@@ -22,6 +46,7 @@
 </template>
 <script>
 import { onMounted, ref, shallowReactive, reactive } from 'vue'
+import { useRouter } from 'vue-router'
 import axios from 'axios'
 import Konva from 'konva'
 import * as d3 from 'd3'
@@ -34,7 +59,11 @@ export default {
       id2relation: Object(),
       embedding: Object(),
       edge_type_count: Object(),
+      pagerank: Object(),
+      degree_centrality: Object()
     })
+
+    const router = useRouter()
 
     let nodesToRender = []
 
@@ -49,10 +78,23 @@ export default {
     let barSVGWidth = ref(1000)
     let barSVGHeight = ref(1000)
 
+    let pagerank_value = ref([0, 1])
+    let pagerank_min = ref(0)
+    let pagerank_max = ref(1)
+
+    let degree_centrality_value = ref([0, 1])
+    let degree_centrality_min = ref(0)
+    let degree_centrality_max = ref(1)
+
     let selectFilter = reactive({
       selectedCircle: new Array(),
-      selectedLabel: new Array()
+      selectedLabel: new Array(),
+      selectedNodeByPR: new Array(),
+      selectedNodeByDC: new Array()
     })
+
+    let _DECIMAL_EQUAL = (a, b) => Math.abs(a - b) < 1e-8
+    let _IN_RANGE = (x, R) => x <= R[1] && x >= R[0]
 
     let relation2id = Object()
 
@@ -72,9 +114,28 @@ export default {
           visData.id2relation = res.data.id2relation
           visData.embedding = res.data.embedding
           visData.edge_type_count = res.data.edge_type_count
-          visData.edge_type_count = Object.entries(visData.edge_type_count).map(([k, v]) => ({'type': k, 'frequency': v}))
+          visData.pagerank = res.data.pagerank
+          visData.degree_centrality = res.data.degree_centrality
+          pagerank_min.value = res.data.pagerank_min
+          pagerank_max.value = res.data.pagerank_max
+          degree_centrality_min.value = res.data.degree_centrality_min
+          degree_centrality_max.value = res.data.degree_centrality_max
+
+          console.log(visData)
+
+          visData.edge_type_count = Object.entries(visData.edge_type_count).map(
+            ([k, v]) => ({'type': k, 'frequency': v})
+          )
+          // visData.pagerank = Object.entries(visData.pagerank).map(
+          //   ([k, v]) => ({'node': k, 'pagerank': v})
+          // )
+          // visData.degree_centrality = Object.entries(visData.degree_centrality).map(
+          //   ([k, v]) => ({'node': k, 'degree_centrality': v})
+          // )
 
           relation2id = Object.fromEntries(Object.entries(visData.id2relation).map(([k, v]) => ([v, k])))
+          pagerank_value.value = [pagerank_min.value, pagerank_max.value]
+          degree_centrality_value.value = [degree_centrality_min.value, degree_centrality_max.value]
 
           isDataLoaded.value = true
 
@@ -230,7 +291,7 @@ export default {
       svg.append("g")
         .attr("transform", `translate(0,${marginTop})`)
         .call(d3.axisTop(x))
-        .call(g => g.select(".domain").remove())
+        // .call(g => g.select(".domain").remove())
 
       svg.append("g")
         .attr("transform", `translate(${marginLeft},0)`)
@@ -250,13 +311,63 @@ export default {
         })
     }
 
+    function filter_nodes_pagerank(filtered_already = true) {
+      if (!_DECIMAL_EQUAL(pagerank_value.value[0], pagerank_min) 
+      || !_DECIMAL_EQUAL(pagerank_value.value[1], pagerank_max)) {
+        visData.pagerank.forEach(v => {
+          if (_IN_RANGE(v['pagerank'], pagerank_value.value)) {
+            selectFilter.selectedNodeByPR.push(v['node'])
+          }
+        })
+        if (filtered_already) {
+          let _selectedPRSets = new Set(selectFilter.selectedNodeByPR)
+          let _nodesToRenderSets = new Set(nodesToRender)
+          nodesToRender = Array.from(
+            new Set(
+              [..._selectedPRSets].filter(value => _nodesToRenderSets.has(value))
+            )
+          )
+        } else {
+          nodesToRender = Array.from(selectFilter.selectedNodeByPR)
+        }
+      }
+    }
+
+    function filter_nodes_degree_cetrality(filtered_already = true) {
+      if (!_DECIMAL_EQUAL(degree_centrality_value.value[0], degree_centrality_min)
+      || !_DECIMAL_EQUAL(degree_centrality_value.value[1], degree_centrality_max)) {
+        visData.degree_centrality.forEach(v => {
+          if (_IN_RANGE(v['degree_centrality'], degree_centrality_value.value)) {
+            selectFilter.selectedNodeByDC.push(v['node'])
+          }
+        })
+        if (filtered_already) {
+          let _selectedDCSets = new Set(selectFilter.selectedNodeByDC)
+          let _nodesToRenderSets = new Set(nodesToRender)
+          nodesToRender = Array.from(
+            new Set(
+              [..._selectedDCSets].filter(value => _nodesToRenderSets.has(value))
+            )
+          )
+        } else {
+          nodesToRender = Array.from(selectFilter.selectedNodeByDC)
+        }
+      }
+    }
+
     function filter_nodes() {
-      let selectCircleLength = selectFilter.selectedCircle.length
+      selectFilter.selectedNodeByPR = []
+      selectFilter.selectedNodeByDC = []
+      let selectedCircleLength = selectFilter.selectedCircle.length
       let selectedLabelLength = selectFilter.selectedLabel.length
-      if (selectCircleLength === 0 && selectedLabelLength === 0) {
-        init()
+      if (selectedCircleLength === 0 && selectedLabelLength === 0) {
+        filter_nodes_pagerank(false)
+        filter_nodes_degree_cetrality()
+        nodesReRender()
       } else if (selectedLabelLength === 0) {
         nodesToRender = Array.from(selectFilter.selectedCircle)
+        filter_nodes_pagerank()
+        filter_nodes_degree_cetrality()
         nodesReRender()
       } else {
         let selectedLabelForm = new FormData()
@@ -273,17 +384,22 @@ export default {
             console.log(selectFilter)
             console.log(selectedNodesByLabel)
 
-            if (selectCircleLength !== 0) {
-              let _selectedCircleSets = new Set(selectFilter.selectedCircle)
-              let _selectedLabelSets = new Set(selectedNodesByLabel)
+            let _selectedCircleSets = new Set(selectFilter.selectedCircle)
+            let _selectedLabelSets = new Set(selectedNodesByLabel)
+
+            if (selectedCircleLength !== 0) {
               nodesToRender = Array.from(
                 new Set(
                   [..._selectedLabelSets].filter(value => _selectedCircleSets.has(value))
                 )
               )
             } else {
-              nodesToRender = selectedNodesByLabel
+              nodesToRender = Array.from(selectedNodesByLabel)
             }
+            
+            filter_nodes_pagerank()
+            filter_nodes_degree_cetrality()
+
             console.log(nodesToRender)
             nodesReRender()
           }
@@ -293,6 +409,27 @@ export default {
     
     function cancel_selection() {
       init()
+      nodesToRender = []
+      selectFilter.selectedCircle = []
+      selectFilter.selectedLabel = []
+      selectFilter.selectedNodeByPR = []
+      selectFilter.selectedNodeByDC = []
+    }
+
+    function select_nodes() {
+      let selectNodesForm = new FormData()
+      selectNodesForm.append('selection', nodesToRender)
+      axios.post('http://127.0.0.1:5000/selection', selectNodesForm, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      }).then(
+        res => {
+          if (res.data.message === 200) {
+            router.push('/visembedding')
+          }
+        }
+      )
     }
 
     return { 
@@ -302,9 +439,16 @@ export default {
       visData, 
       selectFilter, 
       barSVGHeight, 
-      barSVGWidth, 
+      barSVGWidth,
+      pagerank_value,
+      pagerank_min,
+      pagerank_max,
+      degree_centrality_value,
+      degree_centrality_min,
+      degree_centrality_max,
       filter_nodes, 
-      cancel_selection 
+      cancel_selection,
+      select_nodes
     }
   },
 }
@@ -322,5 +466,9 @@ export default {
   flex-wrap: nowrap;
   justify-content: center;
   align-content: flex-start;
+}
+
+.slider {
+  max-width: 600px;
 }
 </style>
