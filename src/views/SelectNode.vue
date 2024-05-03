@@ -234,6 +234,7 @@ export default {
       })
 
       stage.add(layer)
+      selectFilter.selectedCircle = []
     }
 
     function drawBarChart(){
