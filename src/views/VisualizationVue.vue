@@ -1,31 +1,52 @@
 <template>
   <div>
-    <el-row>
-      <el-col :span="20" justify="start">
-        <svg ref="svg" :height="height" :width="width" id="svg"></svg>
-      </el-col>
-      <el-col :span="4">
-        <svg id="legend"></svg>
-      </el-col>
-    </el-row>
-    <!-- <el-row>
-      <svg id="paths" :height="height" :width="width"></svg>
-    </el-row> -->
-    
-    <button @click="findPaths(1, 1764)">
-      搜索
-    </button>
-    <button @click="aggregateNodes">
-      隐藏
-    </button>
-    <button @click="deAggregateNodes">
-      显示
-    </button>
+    <el-container>
+      <el-header>
+        <p class="header">Subgraph Embedding Visualization</p>
+      </el-header>
+      <el-main>
+        <el-row>
+          <el-col :span="20" justify="start">
+            <svg ref="svg" :height="height" :width="width" id="svg"></svg>
+          </el-col>
+          <el-col :span="4">
+            <el-row>
+              <el-col :offset="4" :span="6">
+                <span class="hint">Relation Legend</span>
+              </el-col>
+              <el-col :span="24">
+                <svg id="legend" :width="300" :height="500"></svg>
+              </el-col>
+              <el-col :span="12">
+                <el-button type="primary" text @click="add_start">As Start</el-button>
+              </el-col>
+              <el-col :span="12">
+                <el-button type="primary" text @click="add_end">As End</el-button>
+              </el-col>
+              <el-col :span="24">
+                <li v-for="(item, index) in prob.result" :key="index">
+                  {{ visData.id2relation[item.relation] }} : {{ (item.prob * 100).toFixed(4) + '%' }}
+                </li>
+              </el-col>
+            </el-row>
+          </el-col>
+        </el-row>
+        <el-button @click="findPaths">
+          搜索
+        </el-button>
+        <el-button @click="aggregateNodes">
+          隐藏
+        </el-button>
+        <el-button @click="deAggregateNodes">
+          显示
+        </el-button>
+      </el-main>
+    </el-container>
   </div>
 </template>
 
 <script>
-import { onMounted, ref, shallowReactive } from 'vue';
+import { onMounted, ref, reactive, shallowReactive } from 'vue';
 import axios from 'axios';
 import * as d3 from 'd3';
 
@@ -46,6 +67,8 @@ export default {
     let height = ref(1000)
     let width = ref(1000)
 
+    let startNode = -1, endNode = -1, selectNode = -1;
+
     let link = {}, node = {}, graphAgg = {}, nodeToAggregate = {}, linkToAggregate = {};
     let links = [], nodes = []; // datum
     let aggregationPos = {}, beforeAggregationPos = {};
@@ -55,6 +78,10 @@ export default {
       '#7f20ac', '#9785d7', '#4e45a3', '#d179f8', '#9b1b5c', '#f2c8e8', '#75435b', 
       '#fb0998', '#e4659b', '#3f16f9', '#ea3ffc'
     ]
+
+    let prob = reactive({
+      result: new Array()
+    })
 
     const color = d3.scaleOrdinal(category18)
 
@@ -71,6 +98,7 @@ export default {
           visData.entity2id = Object.fromEntries(
             Object.entries(visData.id2entity).map(([k, v]) => [v, k])
           )
+          visData.nodes_to_render = res.data.chosen
           init();
         }
       )
@@ -150,6 +178,20 @@ export default {
         .attr("cx", (d) => d.x)
         .attr("cy", (d) => d.y)
         .attr('r', 4)
+        .on('click', function(e, d) {
+          let cid = visData.entity2id[d.id]
+          if (selectNode !== cid) {
+            selectNode = cid
+            console.log(selectNode)
+            d3.select(this).attr('stroke', 'red')
+          } else {
+            selectNode = -1
+            d3.select(this).attr('stroke', 'black')
+          }
+        })
+
+      node.filter(d => visData.nodes_to_render.includes(parseInt(visData.entity2id[d.id])))
+        .attr('fill', 'red')
 
       nodeToAggregate = node.filter(
         d => {
@@ -312,6 +354,24 @@ export default {
         .attr('r', 4)
     }
 
+    function add_start() {
+      startNode = selectNode
+    }
+
+    function add_end() {
+      endNode = selectNode
+      let predictForm = new FormData()
+      predictForm.append('start', startNode)
+      predictForm.append('end', endNode)
+      axios.post('http://127.0.0.1:5000/predict', predictForm, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      }).then(res => {
+        prob.result = res.data.result
+      })
+    }
+
     function findPaths(start, end) {
       console.log(start, end)
       const PathForm = new FormData();
@@ -360,7 +420,17 @@ export default {
         }
       )
     }
-    return {visData, findPaths, aggregateNodes, deAggregateNodes, width, height}
+    return {
+      visData, 
+      findPaths, 
+      aggregateNodes, 
+      deAggregateNodes, 
+      width, 
+      height,
+      prob,
+      add_start,
+      add_end
+    }
   },
 }
 </script>

@@ -1,15 +1,22 @@
 <template>
   <div>
     <el-row>
-      <el-col :span="12" justify="start">
+      <el-col :span="18" justify="start">
         <div id="container"/>
       </el-col>
-      <el-col :span="12" justify="start">
-        <el-row id="filter mb-4" v-show="isDataLoaded">
+      <el-col :span="6" justify="start">
+        <el-row id="mb-4" v-show="isDataLoaded">
+          <el-col :span="24">
+            <div class="hint">BarChart of Numbers of Relation</div>
+            <div class="hint">Click on a certain type of relation to choose</div>
+          </el-col>
           <el-col :span="24">
             <svg id="hist-container" :height="barSVGHeight" :width="barSVGWidth"></svg>
           </el-col>
-          <el-col :span="12" :offset="6">
+          <el-col :span="24">
+            <span class="hint">Entity PageRank</span>
+          </el-col>
+          <el-col :span="24">
             <el-slider class="slider" 
             v-model="pagerank_value" 
             range 
@@ -19,7 +26,10 @@
             :max="pagerank_max"
             />
           </el-col>
-          <el-col :span="12" :offset="6">
+          <el-col :span="24">
+            <span class="hint">Entity Degree Centrality</span>
+          </el-col>
+          <el-col :span="24">
             <el-slider 
             class="slider" 
             v-model="degree_centrality_value" 
@@ -38,6 +48,19 @@
           </el-col>
           <el-col :span="8">
             <el-button type="primary" @click="select_nodes" text>Select Nodes</el-button>
+          </el-col>
+          <el-col :span="16" :offset="4" style="margin-top: 50px;">
+            <el-card style="max-width: 480px; text-align: left;">
+              <p>
+                You can click on a certain point to choose an entity, 
+              or you can filter them after selecting relation types or 
+              scaling pagerank and degree centrality.
+              </p>
+              <p>
+                When you finished you should click the "Select Nodes" 
+              button to choose the source entities.
+              </p>
+            </el-card>
           </el-col>
         </el-row>
       </el-col>
@@ -72,8 +95,8 @@ export default {
     })
 
     let isDataLoaded = ref(false)
-    let height = ref(1200)
-    let width = ref(1200)
+    let height = ref(1000)
+    let width = ref(1000)
 
     let barSVGWidth = ref(1000)
     let barSVGHeight = ref(1000)
@@ -458,18 +481,25 @@ export default {
 #container {
   border: 5px solid;
   border-color: grey;
-  width: 1200px;
-  height: 1200px;
+  width: 1000px;
+  height: 1000px;
 }
 
 #filter {
   flex-direction: column;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: center;
   align-content: flex-start;
 }
 
 .slider {
   max-width: 600px;
+}
+
+.hint {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

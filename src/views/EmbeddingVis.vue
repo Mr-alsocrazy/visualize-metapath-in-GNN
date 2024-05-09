@@ -1,45 +1,54 @@
 <template>
   <div>
-    <el-row>
-      <el-col :span="20" justify="start">
-        <svg ref="svg" :height="height" :width="width" id="svg"></svg>
-      </el-col>
-      <el-col :span="4">
+    <el-container>
+      <el-header>
+        <p class="header">Subgraph Embedding Visualization</p>
+      </el-header>
+      <el-main>
         <el-row>
-          <el-col :span="24">
-            <svg id="legend" :width="300" :height="500"></svg>
+          <el-col :span="20" justify="start">
+            <svg ref="svg" :height="height" :width="width" id="svg"></svg>
           </el-col>
-          <el-col :span="12">
-            <el-button type="primary" text @click="add_start">As Start</el-button>
-          </el-col>
-          <el-col :span="12">
-            <el-button type="primary" text @click="add_end">As End</el-button>
-          </el-col>
-          <el-col :span="24">
-            <li v-for="(item, index) in prob.result" :key="index">
-              {{ visData.id2relation[item.relation] }} : {{ (item.prob * 100).toFixed(4) + '%' }}
-            </li>
+          <el-col :span="4">
+            <el-row>
+              <el-col :offset="4" :span="6">
+                <span class="hint">Relation Legend</span>
+              </el-col>
+              <el-col :span="24">
+                <svg id="legend" :width="300" :height="500"></svg>
+              </el-col>
+              <el-col :span="12">
+                <el-button type="primary" text @click="add_start">As Start</el-button>
+              </el-col>
+              <el-col :span="12">
+                <el-button type="primary" text @click="add_end">As End</el-button>
+              </el-col>
+              <el-col :span="24">
+                <li v-for="(item, index) in prob.result" :key="index">
+                  {{ visData.id2relation[item.relation] }} : {{ (item.prob * 100).toFixed(4) + '%' }}
+                </li>
+              </el-col>
+            </el-row>
           </el-col>
         </el-row>
-      </el-col>
-    </el-row>
+        <el-button type="primary" @click="findPaths">
+          搜索
+        </el-button>
+        <el-button type="primary" @click="toForce">
+          查看拓扑图
+        </el-button>
+      </el-main>
+    </el-container>
+    
     <!-- <el-row>
       <svg id="paths" :height="height" :width="width"></svg>
     </el-row> -->
-    <button @click="findPaths">
-      搜索
-    </button>
-    <button @click="aggregateNodes">
-      隐藏
-    </button>
-    <button @click="deAggregateNodes">
-      显示
-    </button>
   </div>
 </template>
 
 <script>
 import { onMounted, reactive, ref, shallowReactive } from 'vue';
+import { useRouter } from 'vue-router'
 import axios from 'axios';
 import * as d3 from 'd3';
 
@@ -55,6 +64,12 @@ export default {
       entity2id: Object(),
       nodes_to_render: Object()
     });
+
+    const router = useRouter()
+
+    function toForce() {
+      router.push('/visualization')
+    }
 
     let startNode = -1, endNode = -1
     let selectNode = -1
@@ -195,9 +210,10 @@ export default {
         .on("zoom", ({transform}) => {
           graph.attr('transform', transform)
           node.attr("r", 4 / transform.k)
+            .attr("stroke-width", 1.5 / transform.k)
           svg.selectAll('.metapath').attr('stroke-width', 5 / transform.k)
           svg.selectAll('.link').attr('stroke-width', 2 / transform.k)
-        }));
+        }))
 
       legend.append('g')
       .attr('stroke-width', 5)
@@ -407,7 +423,8 @@ export default {
       height, 
       prob,
       add_start, 
-      add_end
+      add_end,
+      toForce
     }
   },
 }
@@ -421,5 +438,17 @@ button {
   height: 20px;
   width: 50px;
   z-index: 999;
+}
+
+.header {
+  text-align: center;
+  font-size: 20px;
+}
+
+.hint {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
